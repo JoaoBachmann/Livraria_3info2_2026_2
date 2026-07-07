@@ -8,7 +8,7 @@ class CompraSerializer(ModelSerializer):
     status = CharField(source='get_status_display', read_only=True)
     class Meta:
         model = Compra
-        fields = '__all__'
+        fields = ('id', 'usuario', 'status', 'total', 'itens')
 
 
 class ItensCompraSerializer(ModelSerializer):
