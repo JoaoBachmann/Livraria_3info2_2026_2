@@ -1,3 +1,5 @@
+from django.db import transaction
+
 from rest_framework.serializers import (
     CharField,
     CurrentUserDefault,
@@ -13,11 +15,13 @@ from core.models import Compra, ItensCompra
 class ItensCompraCreateUpdateSerializer(ModelSerializer):
     class Meta:
         model = ItensCompra
-        fields = ('livro', 'quantidade')
+        fields = ('livro', 'quantidade', 'preco')
 
     def validate_quantidade(self, quantidade):
         if quantidade <= 0:
-            raise ValidationError('A quantidade deve ser maior do que zero.')
+            raise ValidationError(
+                'A quantidade deve ser maior do que zero.'
+            )
         return quantidade
 
     def validate(self, item):
@@ -33,18 +37,18 @@ class ItensCompraListSerializer(ModelSerializer):
 
     class Meta:
         model = ItensCompra
-        fields = ('quantidade', 'livro')
+        fields = ('quantidade', 'preco', 'livro')
 
 
 class ItensCompraSerializer(ModelSerializer):
     total = SerializerMethodField()
 
     def get_total(self, instance):
-        return instance.livro.preco * instance.quantidade
+        return instance.quantidade * instance.preco
 
     class Meta:
         model = ItensCompra
-        fields = ('livro', 'quantidade', 'total')
+        fields = ('livro', 'quantidade', 'preco', 'total')
         depth = 1
 
 
@@ -64,14 +68,21 @@ class CompraCreateUpdateSerializer(ModelSerializer):
         model = Compra
         fields = ('id', 'usuario', 'itens')
 
-    def create(self, validated_data):
-        itens_data = validated_data.pop('itens')
-        compra = Compra.objects.create(**validated_data)
+    @transaction.atomic
+    def update(self, compra, validated_data):
+        itens = validated_data.pop('itens', None)
 
-        for item_data in itens_data:
-            ItensCompra.objects.create(compra=compra, **item_data)
+        if itens is not None:
+            compra.itens.all().delete()
 
-        return compra
+            for item in itens:
+                item['preco'] = item['livro'].preco
+                ItensCompra.objects.create(
+                    compra=compra,
+                    **item
+                )
+
+        return super().update(compra, validated_data)
 
 
 class CompraSerializer(ModelSerializer):
